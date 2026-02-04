@@ -16,7 +16,7 @@ final class ChatPanelWindowController: NSWindowController, NSWindowDelegate {
 
         let w = NSPanel(
             contentRect: NSRect(x: anchorRect.maxX + 8, y: anchorRect.midY - 180, width: 360, height: 280),
-            // 需要 mini/zoom 按钮就必须加 .miniaturizable / .resizable
+            // 保持红绿灯默认行为（最小化/缩放/排列），不要劫持成业务按钮
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .utilityWindow, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -31,8 +31,6 @@ final class ChatPanelWindowController: NSWindowController, NSWindowDelegate {
 
         super.init(window: w)
         w.delegate = self
-
-        configureTitlebarButtons()
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -51,34 +49,6 @@ final class ChatPanelWindowController: NSWindowController, NSWindowDelegate {
             height: w.frame.height
         )
         w.setFrame(newFrame, display: true)
-    }
-
-    private func configureTitlebarButtons() {
-        guard let w = window else { return }
-
-        // 红色：保持默认关闭
-
-        // 黄色：复制全部（prompt + answer）
-        if let b = w.standardWindowButton(.miniaturizeButton) {
-            b.target = self
-            b.action = #selector(copyAll)
-            b.toolTip = "复制全部（问题 + 回答）"
-        }
-
-        // 绿色：清空输入和输出
-        if let b = w.standardWindowButton(.zoomButton) {
-            b.target = self
-            b.action = #selector(clearAll)
-            b.toolTip = "清空对话"
-        }
-    }
-
-    @objc private func copyAll() {
-        viewModel.copyAllToPasteboard()
-    }
-
-    @objc private func clearAll() {
-        viewModel.clearAll()
     }
 }
 
@@ -155,12 +125,29 @@ struct ChatPanelView: View {
     @ObservedObject var viewModel: ChatViewModel
     var body: some View {
         VStack(spacing: 10) {
-            HStack {
+            HStack(spacing: 8) {
                 TextField("输入问题，回车发送", text: $viewModel.prompt)
                     .textFieldStyle(.roundedBorder)
                     .onSubmit { viewModel.send() }
+
                 Button("发送") { viewModel.send() }
                     .disabled(viewModel.isLoading)
+
+                Button {
+                    viewModel.copyAllToPasteboard()
+                } label: {
+                    Image(systemName: "doc.on.doc")
+                }
+                .help("复制全部")
+                .disabled(viewModel.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && viewModel.answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                Button(role: .destructive) {
+                    viewModel.clearAll()
+                } label: {
+                    Image(systemName: "trash")
+                }
+                .help("清空")
+                .disabled(viewModel.prompt.isEmpty && viewModel.answer.isEmpty && viewModel.errorText == nil)
             }
             
             .font(.caption)
