@@ -8,30 +8,40 @@ import AppKit
 import Combine
 final class ChatPanelWindowController: NSWindowController, NSWindowDelegate {
     private let viewModel: ChatViewModel
+
     init(anchorRect: CGRect, apiKeyProvider: @escaping () -> String?, stateModel: PetStateModel) {
         self.viewModel = ChatViewModel(apiKeyProvider: apiKeyProvider, stateModel: stateModel)
+
         let hosting = NSHostingView(rootView: ChatPanelView(viewModel: viewModel))
+
         let w = NSPanel(
             contentRect: NSRect(x: anchorRect.maxX + 8, y: anchorRect.midY - 180, width: 360, height: 280),
-            styleMask: [.titled, .closable, .utilityWindow, .nonactivatingPanel],
+            // 需要 mini/zoom 按钮就必须加 .miniaturizable / .resizable
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .utilityWindow, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
+
         w.isReleasedWhenClosed = false
         w.level = .floating
         w.isOpaque = false
         w.backgroundColor = .windowBackgroundColor.withAlphaComponent(0.95)
         w.title = "Ask AI"
         w.contentView = hosting
+
         super.init(window: w)
         w.delegate = self
+
+        configureTitlebarButtons()
     }
+
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
     func show() {
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
-    
+
     func reposition(anchorRect: CGRect) {
         guard let w = window else { return }
         let newFrame = NSRect(
@@ -42,20 +52,51 @@ final class ChatPanelWindowController: NSWindowController, NSWindowDelegate {
         )
         w.setFrame(newFrame, display: true)
     }
-    
+
+    private func configureTitlebarButtons() {
+        guard let w = window else { return }
+
+        // 红色：保持默认关闭
+
+        // 黄色：复制全部（prompt + answer）
+        if let b = w.standardWindowButton(.miniaturizeButton) {
+            b.target = self
+            b.action = #selector(copyAll)
+            b.toolTip = "复制全部（问题 + 回答）"
+        }
+
+        // 绿色：清空输入和输出
+        if let b = w.standardWindowButton(.zoomButton) {
+            b.target = self
+            b.action = #selector(clearAll)
+            b.toolTip = "清空对话"
+        }
+    }
+
+    @objc private func copyAll() {
+        viewModel.copyAllToPasteboard()
+    }
+
+    @objc private func clearAll() {
+        viewModel.clearAll()
+    }
 }
+
 @MainActor
 final class ChatViewModel: ObservableObject {
     @Published var prompt: String = ""
     @Published var answer: String = ""
     @Published var isLoading: Bool = false
     @Published var errorText: String? = nil
+
     private let apiKeyProvider: () -> String?
     private let stateModel: PetStateModel
+
     init(apiKeyProvider: @escaping () -> String?, stateModel: PetStateModel) {
         self.apiKeyProvider = apiKeyProvider
         self.stateModel = stateModel
     }
+
     func send() {
         let q = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty else { return }
@@ -63,6 +104,7 @@ final class ChatViewModel: ObservableObject {
         answer = ""
         isLoading = true
         stateModel.state = .thinking
+
         Task {
             defer {
                 Task { @MainActor in
@@ -70,10 +112,12 @@ final class ChatViewModel: ObservableObject {
                     self.stateModel.state = .idle
                 }
             }
+
             guard let key = apiKeyProvider(), !key.isEmpty else {
                 await MainActor.run { self.errorText = "请先设置 DeepSeek API Key（下一步我给你接 Keychain 设置页）" }
                 return
             }
+
             do {
                 let client = DeepSeekClient(apiKey: key)
                 let res = try await client.ask(q)
@@ -83,7 +127,29 @@ final class ChatViewModel: ObservableObject {
             }
         }
     }
+
+    func clearAll() {
+        prompt = ""
+        answer = ""
+        errorText = nil
+    }
+
+    func copyAllToPasteboard() {
+        let q = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        let a = answer.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        var parts: [String] = []
+        if !q.isEmpty { parts.append("Q: \(q)") }
+        if !a.isEmpty { parts.append("A: \(a)") }
+        if parts.isEmpty { return }
+
+        let text = parts.joined(separator: "\n\n")
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(text, forType: .string)
+    }
 }
+
 struct ChatPanelView: View {
        
     @ObservedObject var viewModel: ChatViewModel
