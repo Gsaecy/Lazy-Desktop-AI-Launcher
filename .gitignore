@@ -1,0 +1,22 @@
+.DS_Store
+# Xcode
+DerivedData/
+*.xcuserstate
+*.xcuserdata/
+*.moved-aside
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+xcuserdata/
+# Build products
+build/
+*.ipa
+*.dSYM
+
+# SwiftPM
+.build/
+Package.resolved
+
+# Logs
+*.log

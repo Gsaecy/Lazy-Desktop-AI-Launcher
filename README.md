@@ -1,2 +1,16 @@
-# Lazy-Desktop-AI-Launcher
-You can directly access the AI ​​Q&amp;A session through the cartoon character that's always on your desktop, saving you the time of opening the software or browser. Yes, you heard right, I'm that lazy!
+# Lazy Desktop AI Launcher
+
+A small macOS floating desktop pet / launcher (SwiftUI + AppKit).
+
+## Requirements
+- macOS (Xcode project)
+- Xcode 16+ (or compatible)
+
+## Run
+1. Open `LazyDesktopAI.xcodeproj` in Xcode
+2. Select target **LazyDesktopAI**
+3. Product → Run
+
+## Notes
+- API keys are stored in Keychain (not committed).
+- Animation uses PNG frame sequences bundled in the app resources.
